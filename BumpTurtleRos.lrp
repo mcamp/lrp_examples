@@ -1,0 +1,79 @@
+;Turtlebot simple sweep using ROS nodes
+;* Go Straight forward until hit with a wall
+;* When hit a wall, go back first then change direction and go forward again
+;* Repeat until the end of time
+ 
+;ROS nodes
+(var motor := ~cmd_vel)  
+(var bumper := ~bumper) 
+
+;calibration
+;Twist is the type of the velocity message
+(var vel_forward := (Twist new linear x: 0.2))
+(var vel_backward := (Twist new linear x: -0.2))
+(var rotate_clockwise := (Twist new angular z: -0.2))
+(var rotate_anticlockwise := (Twist new angular z: 0.2))
+(var vel_stop := (Twist new))
+
+(machine sweeper 
+    ;define global var for the machine
+    (var bumper_state := -1)
+    
+	(state forward
+		(running [motor publish vel_forward])
+		(onexit [motor publish vel_stop])
+	)
+  
+	(state bumped
+	    ; we could use the same name as the state that represent this machine
+		(machine bumped 
+			
+			(state backward 
+			    (running [motor publish vel_backward])
+			    (onexit [motor publish vel_stop])
+			    
+			(state turn
+                ;rotate a bit more than 90°
+				(running [
+				    ;0 left
+				    ;1 front
+				    ;2 right
+				                      
+				    (if  ((bumper_state) == 2)
+				        (motor publish rotate_clockwise)
+				        (motor publish rotate_anticlockwise))
+				         
+				    
+				])
+				(onexit  [motor publish vel_stop]))
+		    (state end)		   
+				
+			; 1 second
+			(ontime 1 backward -> turn t-turn)
+			
+			; rotate about 8 seconds 
+			(ontime 8 turn -> end t-end)
+			
+		)
+		
+		;spawn the lookalgo machine, start in the lookleft state
+		(onentry [machine spawn: bumped in: backward])
+		(onexit [motor publish vel_stop])
+	)
+	
+	(eps bumped -> forward t-continue)    
+
+	;subscrite to ros event
+	;in this example, 
+	;  'bumping' is the name of the event
+	;  st block make possible to do something when subscribe, 'msg' is the message that ros send
+	(bumper subscribe bumping [:msg|
+	    (bumper_state := msg state)
+	])
+	(on bumping *-> bumped t-bumped)
+	
+
+)
+
+;GO! 
+[machine spawn: sweeper in: forward]

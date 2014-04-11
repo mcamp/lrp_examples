@@ -1,0 +1,99 @@
+;using ; as comments in honor of lisp :-)
+;Line follower. Needs to
+;* follow the line
+;* turn around 180 when wall is hit by bumper, follow line
+;* stop when bumper is hit again
+ 
+ ;use natively ros topics or services ??
+(var leftmotor := /motor1)  
+(var rightmotor := /motor.2) 
+(var bumper := /sensor1) 
+(var light := /sensor2 ) 
+
+;need to map ST code sending messages to more PhaROS type style of code
+
+; calibration ''constants'' 
+(var maxlook := 100)
+(var lightthresh := 128)
+(var backdist := 10)
+(var turndist := 100)
+
+; a state machine with name follower
+; see below how to kick it into action
+(machine follower 
+	(state moving
+		; what to do when entering the state. always completely executed
+		; [] is a Smalltalk Block
+		(onentry [leftmotor forward . rightmotor forward])
+		; what to do when leaving the state. always completely executed
+		(onexit [leftmotor stop . rightmotor stop])
+	)
+	
+	;a transition triggered by outofline event
+	; from moving state to looking state
+	; we call it tlooking
+	(on outofline moving -> looking tlooking)
+	(on intheline looking -> moving tmoving)
+	
+	;events happen whenever their condition evaluates to true
+	(event outofline [light read > lightthresh + 10]) 
+	(event intheline [light read < lightthresh - 10])
+	
+	(state looking
+		(machine lookalgo 
+			(var time := maxlook)
+			
+			;timeout transitions
+			(ontime maxlook lookleft -> returnleft t-returnleft)
+			(ontime maxlook lookright -> returnright t-returnright)
+			(ontime maxlook returnleft -> lookright t-lookright)
+			(ontime maxlook returnright -> lookleft t-lookleft)
+			
+			(state lookleft (onentry [rightmotor forward]))
+			(state returnleft
+				(onentry [rightmotor back])
+				(onexit  [rightmotor stop]))
+			
+			(state lookright (onentry [leftmotor forward]))
+			(state returnright
+				(onentry [leftmotor back])
+				(onexit [leftmotor stop . time := time * 2 ]))
+		)
+		
+		;spawn the lookalgo machine, start in the lookleft state
+		(onentry [machine spawn: lookalgo in: lookleft])
+		(onexit [leftmotor stop . rightmotor stop])
+	)
+	
+	;wildcard transition, only allowed in from
+	(on bumping *-> bumpturn t-bumpturn)
+	(on ending *-> end t-end)
+	
+	(var hasbumped := false)
+	
+	(event bumping [hasbumped not & bumper isPressed])
+	(event ending [hasbumped & bumper isPressed])
+	
+	;epsilon transition: happens without an event,
+	;after source state onentry is done and there is no nested machine
+	(eps bumpturn -> looking t-looking)
+	
+	(state bumpturn
+		(onentry [rightmotor backward: backdist .
+					leftmotor backward: backdist .
+					bumped := true .
+					;how to wait for the two motors to finish??
+					rightmotor backward: turndist .
+					leftmotor forward: turndist]))
+	
+	(state end (onentry [rightmotor stop . leftmotor stop . sound beep]))
+)
+
+;GO! 
+[machine spawn: follower in: looking]
+
+; missing in the example: the running action in a state. (running [])
+; When in the state the contents of that block is executed inside a loop.
+; the block itself is NOT interrupted,
+; outgoing transitions only happen inbetween each iteration
+; or before the first iteration

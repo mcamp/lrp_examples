@@ -1,22 +1,28 @@
+;;Gofer it smalltalkhubUser: 'jfabry' project: 'RobotPlayground'; package: 'ConfigurationOfLRPParser'; load
+;;(Smalltalk at: #ConfigurationOfLRPParser)
+	loadDevelopment
+;; LRPParser new parse: <ALL TEXT BELOW>
+	
 ;using ; as comments in honor of lisp :-)
 ;Line follower. Needs to
 ;* follow the line
 ;* turn around 180 when wall is hit by bumper, follow line
 ;* stop when bumper is hit again
- 
+
+
  ;use natively ros topics or services ??
-(var leftmotor := /motor1)  
-(var rightmotor := /motor.2) 
-(var bumper := /sensor1) 
-(var light := /sensor2 ) 
+(var leftmotor := [motor1])  
+(var rightmotor := [motor2]) 
+(var bumper := [sensor1]) 
+(var light := [sensor2] ) 
 
 ;need to map ST code sending messages to more PhaROS type style of code
 
 ; calibration ''constants'' 
-(var maxlook := 100)
-(var lightthresh := 128)
-(var backdist := 10)
-(var turndist := 100)
+(var maxlook := [100])
+(var lightthresh := [128])
+(var backdist := [10])
+(var turndist := [100])
 
 ; a state machine with name follower
 ; see below how to kick it into action
@@ -41,7 +47,7 @@
 	
 	(state looking
 		(machine lookalgo 
-			(var time := maxlook)
+			(var time := [maxlook])
 			
 			;timeout transitions
 			(ontime maxlook lookleft -> returnleft t-returnleft)
@@ -69,7 +75,7 @@
 	(on bumping *-> bumpturn t-bumpturn)
 	(on ending *-> end t-end)
 	
-	(var hasbumped := false)
+	(var hasbumped := [false])
 	
 	(event bumping [hasbumped not & bumper isPressed])
 	(event ending [hasbumped & bumper isPressed])
@@ -82,7 +88,7 @@
 		(onentry [rightmotor backward: backdist .
 					leftmotor backward: backdist .
 					bumped := true .
-					;how to wait for the two motors to finish??
+					"how to wait for the two motors to finish??"
 					rightmotor backward: turndist .
 					leftmotor forward: turndist]))
 	
